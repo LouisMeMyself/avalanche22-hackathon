@@ -11,14 +11,14 @@ import Swap from "./Swap";
 const address = {
   "Chain 1": {
     UST: "0xbd81151c48e30b6b2BCA0F15d4F495d76711bcA5",
-    wNativeContract: "0x07B0610F0c9F9C4Fe4E4d8cC7fEEdBBe24C90008",
+    WNATIVE: "0x07B0610F0c9F9C4Fe4E4d8cC7fEEdBBe24C90008",
     gateway: "0x35DD7542dcaf27c275651c86a2B066e09d5d77e1",
     ex: "0x510134513E3Df65851a72268468Bf1d363b1Ced9",
     factory: "0x33001Ab4453554Bad6387C843457b2519e7aF558",
   },
   "Chain 2": {
     UST: "0x7Bb875B51D280dc75953A27f2C07Dd52cB979D95",
-    wNativeContract: "0x0634361AFd07785d82b4Dfb43159A30355A27c9a",
+    WNATIVE: "0x0634361AFd07785d82b4Dfb43159A30355A27c9a",
     gateway: "0xf2988652b06526A26377eB107009211c7e7329d4",
     ex: "0xe2C420fA038a09e19EAe1eC03A4dbA0ced604dBE",
     factory: "0x818c554B468888Ee531A60c889e3849a27F533aA",
@@ -43,20 +43,21 @@ function App() {
   const [token, setToken] = useState({ amount: 0, decimals: 9 });
   const [wNative, setWNative] = useState({ amount: 0, decimals: 18 });
   const [tx, setTx] = useState();
+  const [tokenContract, setTokenContract] = useState();
+  const [wNativeContract, setWNativeContract] = useState();
+  const [gateway, setGateway] = useState();
 
-  let tokenContract = undefined;
-  let wNativeContract = undefined;
-  let gatewayContract = undefined;
   let _pollDataInterval;
 
   async function _manageTx(tx) {
+    console.log(tx);
     setTx(tx.hash);
 
     if (!tx) {
       throw new Error("No tx hash");
     }
 
-    const receipt = await tx.wait();
+    const receipt = await provider.waitForTransaction(tx.hash);
     if (receipt.status === 0) {
       throw new Error("Transaction failed");
     }
@@ -127,24 +128,17 @@ function App() {
 
   const _intializeEthers = async (chainName_) => {
     const signer = await provider.getSigner();
-    tokenContract = new ethers.Contract(
-      address[chainName_].UST,
-      ERC20.abi,
-      signer
+    setTokenContract(
+      new ethers.Contract(address[chainName_].UST, ERC20.abi, signer)
     );
-    wNativeContract = new ethers.Contract(
-      address[chainName_].wNativeContract,
-      WNATIVE.abi,
-      signer
+    setWNativeContract(
+      new ethers.Contract(address[chainName_].WNATIVE, WNATIVE.abi, signer)
     );
-    gatewayContract = new ethers.Contract(
-      address[chainName_].gateway,
-      GATEWAY.abi,
-      signer
+    setGateway(
+      new ethers.Contract(address[chainName_].gateway, GATEWAY.abi, signer)
     );
 
     _startPollingData();
-    _updateBalance();
   };
 
   async function swapFunction(nameInExt, nameOutExt, name, amount) {
@@ -155,6 +149,18 @@ function App() {
           : chainName === "Chain 2"
           ? "Chain 1"
           : "Error";
+
+      await _manageTx(tokenContract.approve(gateway.address, amount));
+
+      console.log(
+        "swapTokensToTokens",
+        address[chainExt].factory,
+        address[chainExt].UST,
+        address[chainExt].WNATIVE,
+        "0",
+        "9970",
+        walletAddress
+      );
 
       const payload = ethers.utils.defaultAbiCoder.encode(
         [
@@ -181,7 +187,7 @@ function App() {
         ]
       );
 
-      const tx_ = gatewayContract.callContractWithToken(
+      const tx_ = gateway.callContractWithToken(
         chainExt,
         address[chainExt].ex,
         payload,
@@ -189,7 +195,7 @@ function App() {
         amount
       );
       setTx(tx_);
-      _manageTx(tx_);
+      await _manageTx(tx_);
     } catch (e) {
       console.log(e);
     } finally {
