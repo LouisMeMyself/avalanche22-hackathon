@@ -1,5 +1,6 @@
 "use strict";
 const { createNetwork, relay } = require("@axelar-network/axelar-local-dev");
+const { BigNumber } = require("@ethersproject/bignumber/lib/bignumber");
 const { ethers } = require("hardhat");
 
 const ExecutableSample = require("../artifacts/contracts/ExecutableSample.sol/ExecutableSample.json");
@@ -91,49 +92,68 @@ const createNativePairAndAddLiquidity = async (
   await (await ex2.connect(user2).addSibling(chain1.name, ex1.address)).wait();
 
   // Get some UST on chain1.
-  await chain1.giveToken(user1.address, "UST", 9_510_000_000);
-  await chain2.giveToken(user2.address, "UST", 9_500_000_000);
+  await chain1.giveToken(user1.address, "UST", 500000000000);
+  await chain2.giveToken(user2.address, "UST", 300000000000);
 
   const pair1 = await createNativePairAndAddLiquidity(
     user1,
     factory1,
     wNative1,
-    95_000_000,
+    ethers.utils.parseEther("3"),
     chain1.ust,
-    9_500_000_000
+    300000000000
   );
   const pair2 = await createNativePairAndAddLiquidity(
     user2,
     factory2,
     wNative2,
-    95_000_000,
+    ethers.utils.parseEther("3"),
     chain2.ust,
-    9_500_000_000
+    300000000000
   );
 
   // This is used for logging.
   const print = async () => {
+    const provider1 = chain1.provider;
+    const provider2 = chain2.provider;
+
     console.log(
       `chain1 user has ${await chain1.ust.balanceOf(
         user1.address
-      )} UST, ${await wNative1.balanceOf(user1.address)} WNative.`
+      )} UST, ${await wNative1.balanceOf(
+        user1.address
+      )} WNative, ${await provider1.getBalance(user1.address)} NATIVE.`
     );
     console.log(
       `chain2 user has ${await chain2.ust.balanceOf(
         user2.address
-      )} UST, ${await wNative2.balanceOf(user2.address)} WNative.`
+      )} UST, ${await wNative2.balanceOf(
+        user2.address
+      )} WNative, ${await provider2.getBalance(user2.address)} NATIVE.`
     );
+
     const reserves1 = await pair1.connect(user1).getReserves();
     console.log(`chain1 pair reserves (${reserves1[0]}, ${reserves1[1]})`);
     const reserves2 = await pair2.connect(user2).getReserves();
     console.log(`chain2 pair reserves (${reserves2[0]}, ${reserves2[1]})`);
+    console.log(
+      `ex1: ${await wNative1.balanceOf(
+        ex1.address
+      )} WNATIVE, ${await provider1.getBalance(
+        ex1.address
+      )} NATIVE, ex2: ${await wNative2.balanceOf(
+        ex2.address
+      )} WNATIVE, ${await provider2.getBalance(ex2.address)} NATIVE`
+    );
   };
 
   console.log("--- Initially ---");
   await print();
 
   await (
-    await chain1.ust.connect(user1).approve(chain1.gateway.address, 10_000_000)
+    await chain1.ust
+      .connect(user1)
+      .approve(chain1.gateway.address, 200_000_000_000)
   ).wait();
   const payload = ethers.utils.defaultAbiCoder.encode(
     [
@@ -146,7 +166,7 @@ const createNativePairAndAddLiquidity = async (
       "address",
     ],
     [
-      "swapTokensToTokens",
+      "swapTokensToNatives",
       factory2.address,
       chain2.ust.address,
       wNative2.address,
@@ -163,7 +183,7 @@ const createNativePairAndAddLiquidity = async (
         ex2.address,
         payload,
         "UST",
-        10_000_000
+        200_000_000_000
       )
   ).wait();
   await sleep(2000);

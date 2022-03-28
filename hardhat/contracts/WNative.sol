@@ -13,5 +13,6 @@ contract WNative is ERC20 {
 
     function withdraw(uint256 amount) public {
         _burn(msg.sender, amount);
+        msg.sender.call{value: amount}("");
     }
 }
